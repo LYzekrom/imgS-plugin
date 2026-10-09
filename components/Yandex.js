@@ -20,6 +20,7 @@ async function Yandex(url) {
 
     const response = await fetch(requestUrl, {
         headers: { cookie: cookie ?? '' },
+        agent: agent,
     }).then((res) => res.text());
 
     if (response.includes('Please confirm that you are not a robot')) {
