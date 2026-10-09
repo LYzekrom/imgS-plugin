@@ -10,8 +10,6 @@ import { HttpsProxyAgent } from 'https-proxy-agent';
 const PROXY_URL = 'https://ascii2d.obfs.dev';
 const BASE_URL = 'https://ascii2d.net';
 
-let flareCache = null;
-
 async function Ascii2d(url) {
     const imagePath = await downloadImage(url);
 
@@ -30,8 +28,7 @@ async function Ascii2d(url) {
     const requestUrl = `${proxy ? PROXY_URL : BASE_URL}/search/file`;
     logger.info(`[Ascii2d] 请求 URL：${requestUrl}，代理：${agent ? '启用' : '未启用'}`);
 
-    let flareHeaders = null;
-    let colorResponse = await fetch(requestUrl, {
+    const colorResponse = await fetch(requestUrl, {
         method: 'POST',
         body: form,
         agent: agent,
@@ -43,18 +40,9 @@ async function Ascii2d(url) {
     }
 
     if (errorBody.includes('Just a moment')) {
-        logger.info('[Ascii2d] 触发 Cloudflare 验证，尝试通过 FlareSolverr 获取凭证');
-        flareHeaders = await getFlareHeaders();
-        if (flareHeaders) {
-            colorResponse = await fetch(requestUrl, {
-                method: 'POST',
-                body: form,
-                agent: agent,
-                headers: flareHeaders,
-            });
-            errorBody = colorResponse.status === 200 ? '' : await colorResponse.text();
-            if (colorResponse.status !== 200) flareCache = null;
-        }
+        logger.info('[Ascii2d] 触发 Cloudflare 验证，尝试通过 FlareSolverr 搜索');
+        const flareResult = await searchByFlareSolverr(url, type);
+        if (flareResult) return parse(flareResult);
     }
 
     logger.info(`[Ascii2d] 响应状态：HTTP ${colorResponse.status} ${colorResponse.statusText}，最终 URL：${colorResponse.url}`);
@@ -65,7 +53,7 @@ async function Ascii2d(url) {
             response = await colorResponse.text();
         } else {
             const bovwUrl = colorResponse.url.replace('/color/', '/bovw/');
-            response = await fetch(bovwUrl, flareHeaders ? { headers: flareHeaders } : {}).then((res) => res.text());
+            response = await fetch(bovwUrl).then((res) => res.text());
         }
         return parse(response);
     } else {
@@ -75,44 +63,42 @@ async function Ascii2d(url) {
     }
 }
 
-async function getFlareHeaders() {
+async function searchByFlareSolverr(imageUrl, type) {
     const flare = Config.getConfig().FlareSolverr;
     if (!flare?.enable) return null;
-    if (flareCache && flareCache.expire > Date.now()) return flareCache.headers;
     try {
-        const result = await fetch(flare.url.replace(/\/$/, '') + '/v1', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                cmd: 'request.get',
-                url: BASE_URL,
-                maxTimeout: 60000,
-            }),
-        }).then((res) => res.json());
-        if (result.status !== 'ok') {
-            logger.error('[Ascii2d] FlareSolverr 请求失败：' + JSON.stringify(result).slice(0, 300));
-            return null;
+        let result = await flareRequest(`${BASE_URL}/search/url/${encodeURIComponent(imageUrl)}`);
+        if (!result) return null;
+        if (type !== 'color' && result.url.includes('/color/')) {
+            result = await flareRequest(result.url.replace('/color/', '/bovw/')) || result;
         }
-        const cookie = result.solution.cookies
-            .filter((item) => item.domain.includes('ascii2d.net'))
-            .map((item) => `${item.name}=${item.value}`)
-            .join('; ');
-        if (!cookie.includes('cf_clearance')) {
-            logger.error('[Ascii2d] FlareSolverr 未返回 cf_clearance：' + JSON.stringify(result.solution.cookies));
-            return null;
-        }
-        flareCache = {
-            headers: {
-                cookie: cookie,
-                'user-agent': result.solution.userAgent,
-            },
-            expire: Date.now() + 10 * 60 * 1000,
-        };
-        return flareCache.headers;
+        return result.html;
     } catch (error) {
-        logger.error('[Ascii2d] FlareSolverr 连接失败：' + error);
+        logger.error('[Ascii2d] FlareSolverr 搜索失败：' + error);
         return null;
     }
+}
+
+async function flareRequest(url) {
+    const flare = Config.getConfig().FlareSolverr;
+    const result = await fetch(flare.url.replace(/\/$/, '') + '/v1', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            cmd: 'request.get',
+            url: url,
+            maxTimeout: 90000,
+        }),
+    }).then((res) => res.json());
+    if (result.status !== 'ok') {
+        logger.error('[Ascii2d] FlareSolverr 请求失败：' + JSON.stringify(result).slice(0, 300));
+        return null;
+    }
+    if (result.solution.response.includes('Just a moment')) {
+        logger.error('[Ascii2d] FlareSolverr 未能通过 Cloudflare 验证');
+        return null;
+    }
+    return { html: result.solution.response, url: result.solution.url };
 }
 
 function parse(body) {
