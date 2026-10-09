@@ -3,9 +3,16 @@ import Config from '../components/Config.js';
 
 let browser = null;
 
+const CHROME_UA = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36';
+
 async function getBrowser() {
     if (browser && browser.connected) return browser;
-    const args = ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'];
+    const args = [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-blink-features=AutomationControlled',
+    ];
     try {
         const proxy = Config.getConfig()?.proxy;
         if (proxy?.enable) {
@@ -24,6 +31,16 @@ async function getBrowser() {
     return browser;
 }
 
+// 抹除无头浏览器的自动化标记，避免被反爬识别（如 Yandex 的 captcha）
+async function newPage() {
+    const page = await (await getBrowser()).newPage();
+    await page.setUserAgent(CHROME_UA);
+    await page.evaluateOnNewDocument(() => {
+        Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+    });
+    return page;
+}
+
 /**
  * 在真实浏览器上下文中下载远程图片并转为 base64
  * 用于规避 Cloudflare 等基于客户端指纹的下载拦截
@@ -32,7 +49,7 @@ async function getBrowser() {
  * @returns {Promise<string|null>} base64:// 开头的图片数据，失败返回 null
  */
 async function urlToBase64(url, referer) {
-    const page = await (await getBrowser()).newPage();
+    const page = await newPage();
     try {
         await page.goto(referer ?? url, { waitUntil: 'domcontentloaded', timeout: 60000 });
         const base64 = await page.evaluate(async (u) => {
@@ -76,7 +93,7 @@ async function setPageCookie(page, cookie) {
  * @returns {Promise<string>} 页面 outerHTML
  */
 async function fetchHtml(url, cookie) {
-    const page = await (await getBrowser()).newPage();
+    const page = await newPage();
     try {
         if (cookie) {
             await setPageCookie(page, cookie);
@@ -97,7 +114,7 @@ async function fetchHtml(url, cookie) {
  * @returns {Promise<any>} fn 的返回值
  */
 async function runInPage(url, cookie, fn, ...args) {
-    const page = await (await getBrowser()).newPage();
+    const page = await newPage();
     try {
         if (cookie) {
             await setPageCookie(page, cookie);
