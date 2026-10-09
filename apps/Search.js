@@ -4,6 +4,7 @@ import Engine from '../components/Engine.js'
 import Init from '../model/init.js'
 
 const setEngine = {};
+const manualEngine = {};
 
 const lnk = {
     'SauceNAO': ['sao', 'sn'],
@@ -70,9 +71,11 @@ export class Search extends plugin {
 
         if (e.msg.startsWith('/搜图') || e.msg.startsWith('#搜图') || e.msg.startsWith('搜图')) {
             setEngine[e.user_id] = await Config.getConfig().default;
+            manualEngine[e.user_id] = false;
         } else {
             let msg = e.msg.match(this.rule[0].reg)[1]
             setEngine[e.user_id] = Object.keys(Engine).find(key => msg.toLowerCase().includes(key.toLowerCase())) || Object.keys(lnk).find(key => lnk[key].some(alias => msg.toLowerCase().includes(alias.toLowerCase())));
+            manualEngine[e.user_id] = true;
         }
 
         if (setEngine[e.user_id] === undefined) return false;
@@ -109,6 +112,17 @@ export class Search extends plugin {
         let engines = await Config.getConfig().next;
 
         used.push(setEngine[this.e.user_id]);
+
+        // 手动指定引擎时不自动切换其他引擎
+        if (manualEngine[this.e.user_id]) {
+            if (msg.length !== 0) {
+                await this.e.reply(Bot.makeForwardMsg(msg));
+            } else {
+                await this.e.reply("已使用 " + used.join('/') + " 搜索引擎搜索图片，未找到相关图片");
+            }
+            return true;
+        }
+
         engines = engines.filter(e => !used.includes(e));
 
         if (msg.length !== 0) {
