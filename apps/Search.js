@@ -171,7 +171,7 @@ export class Search extends plugin {
                         let msg = [];
 
                         if (!safe_mode) {
-                            messages.push({ message: [segment.image(item.image)] });
+                            // messages.push({ message: [segment.image(item.image)] });
                         }
 
                         msg.push(`${item.hash}\n`);
