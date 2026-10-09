@@ -5,6 +5,9 @@ import Init from '../model/init.js'
 
 const setEngine = {};
 
+// NapCat 要求图片段使用 url 字段传递远程地址，file 字段仅支持本地路径/base64
+const urlImage = (url) => ({ type: 'image', data: { url } });
+
 const lnk = {
     'SauceNAO': ['sao', 'sn'],
     'Ascii2d': ['as2d', 'a2d', 'a2'],
@@ -145,7 +148,7 @@ export class Search extends plugin {
 
                         let msg = [];
                         if (!safe_mode) {
-                            messages.push({ message: [segment.image(item.image)] });
+                            messages.push({ message: [urlImage(item.image)] });
                         }
 
                         msg.push(`${item.title}\n\n`);
@@ -171,7 +174,7 @@ export class Search extends plugin {
                         let msg = [];
 
                         if (!safe_mode) {
-                            messages.push({ message: [segment.image(item.image)] });
+                            messages.push({ message: [urlImage(item.image)] });
                         }
 
                         msg.push(`${item.hash}\n`);
@@ -199,7 +202,7 @@ export class Search extends plugin {
 
                         let msg = [];
                         if (!safe_mode) {
-                            messages.push({ message: [segment.image(item.image)] });
+                            messages.push({ message: [urlImage(item.image)] });
                         }
 
                         msg.push(`${item.resolution}\n`);
@@ -216,7 +219,7 @@ export class Search extends plugin {
                         let msg = [];
 
                         if (!safe_mode) {
-                            messages.push({ message: [segment.image(`https:${item.thumb.url}`)] });
+                            messages.push({ message: [urlImage(`https:${item.thumb.url}`)] });
                         }
 
                         msg.push(`${item.snippet.title}\n`);
@@ -285,7 +288,7 @@ export class Search extends plugin {
                     response.forEach(async item => {
                         let msg = [];
                         if (!safe_mode) {
-                            messages.push({ message: [segment.image(item.image)] });
+                            messages.push({ message: [urlImage(item.image)] });
                         }
 
                         msg.push(`${item.title}\n`);
@@ -303,7 +306,7 @@ export class Search extends plugin {
                         let msg = [];
 
                         if (!safe_mode) {
-                            messages.push({ message: [segment.image(item.image_src)] });
+                            messages.push({ message: [urlImage(item.image_src)] });
                         }
                         msg.push(`图片大小：${item.width} × ${item.height}\n`);
                         msg.push(`图片地址：${item.url}`);
@@ -325,7 +328,7 @@ export class Search extends plugin {
                         if (item.similarity < simLimit) return;
 
                         if (!safe_mode) {
-                            messages.push({ message: [segment.image(item.previewImageUrl)] });
+                            messages.push({ message: [urlImage(item.previewImageUrl)] });
                         }
                         messages.push({ message: `标题：${item.title}\n\n${item.source === 'nhentai' ? `链接：https://nhentai.net${item.pagePath}\n链接：https://nhentai.xxx${item.pagePath}` : item.source === 'ehentai' ? `链接：https://e-hentai.org${item.pagePath}\n链接：https://exhentai.org${item.pagePath}` : `链接：https://panda.chaika.moe${item.pagePath}`}` })
                     })
