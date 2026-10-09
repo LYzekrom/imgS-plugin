@@ -9,7 +9,7 @@ import Config from './Config.js';
 import { HttpsProxyAgent } from 'https-proxy-agent';
 import { fetchHtml, runInPage } from '../utils/browser.js';
 
-const BASE_URL = 'https://yandex.com/';
+const BASE_URL = 'https://yandex.ru/';
 const UPLOAD_REQUEST = '{"blocks":[{"block":"b-page_type_search-by-image__link"}]}';
 const BROWSER_UA = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36';
 

@@ -73,13 +73,14 @@ async function urlToBase64(url, referer) {
     }
 }
 
-async function setPageCookie(page, cookie) {
+async function setPageCookie(page, cookie, url) {
+    const domain = '.' + new URL(url).hostname;
     const cookies = cookie.split(';').map((pair) => {
         const idx = pair.indexOf('=');
         return idx > 0 ? {
             name: pair.slice(0, idx).trim(),
             value: pair.slice(idx + 1).trim(),
-            domain: '.yandex.com',
+            domain: domain,
         } : null;
     }).filter(Boolean);
     if (cookies.length) await page.setCookie(...cookies);
@@ -96,7 +97,7 @@ async function fetchHtml(url, cookie) {
     const page = await newPage();
     try {
         if (cookie) {
-            await setPageCookie(page, cookie);
+            await setPageCookie(page, cookie, url);
         }
         await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
         await new Promise((resolve) => setTimeout(resolve, 3000));
@@ -117,7 +118,7 @@ async function runInPage(url, cookie, fn, ...args) {
     const page = await newPage();
     try {
         if (cookie) {
-            await setPageCookie(page, cookie);
+            await setPageCookie(page, cookie, url);
         }
         await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
         await new Promise((resolve) => setTimeout(resolve, 2000));
