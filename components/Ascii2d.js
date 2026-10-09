@@ -28,6 +28,7 @@ async function Ascii2d(url) {
     const requestUrl = `${proxy ? PROXY_URL : BASE_URL}/search/file`;
     logger.info(`[Ascii2d] 请求 URL：${requestUrl}，代理：${agent ? '启用' : '未启用'}`);
 
+    let body = null;
     const colorResponse = await fetch(requestUrl, {
         method: 'POST',
         body: form,
@@ -41,26 +42,44 @@ async function Ascii2d(url) {
 
     if (errorBody.includes('Just a moment')) {
         logger.info('[Ascii2d] 触发 Cloudflare 验证，尝试通过 FlareSolverr 搜索');
-        const flareResult = await searchByFlareSolverr(url, type);
-        if (flareResult) return parse(flareResult);
+        body = await searchByFlareSolverr(url, type);
     }
 
-    logger.info(`[Ascii2d] 响应状态：HTTP ${colorResponse.status} ${colorResponse.statusText}，最终 URL：${colorResponse.url}`);
+    if (!body) {
+        logger.info(`[Ascii2d] 响应状态：HTTP ${colorResponse.status} ${colorResponse.statusText}，最终 URL：${colorResponse.url}`);
 
-    if (colorResponse.status === 200) {
-        let response;
-        if (type === 'color') {
-            response = await colorResponse.text();
+        if (colorResponse.status === 200) {
+            if (type === 'color') {
+                body = await colorResponse.text();
+            } else {
+                const bovwUrl = colorResponse.url.replace('/color/', '/bovw/');
+                body = await fetch(bovwUrl).then((res) => res.text());
+            }
         } else {
-            const bovwUrl = colorResponse.url.replace('/color/', '/bovw/');
-            response = await fetch(bovwUrl).then((res) => res.text());
+            if (!errorBody) errorBody = await colorResponse.text();
+            logger.error(`[Ascii2d] 请求失败，响应内容：${errorBody.slice(0, 500)}`);
+            throw new Error('[Ascii2d] 请求失败，可能触发了Cloudflare的验证机制，请稍后再试');
         }
-        return parse(response);
-    } else {
-        if (!errorBody) errorBody = await colorResponse.text();
-        logger.error(`[Ascii2d] 请求失败，响应内容：${errorBody.slice(0, 500)}`);
-        throw new Error('[Ascii2d] 请求失败，可能触发了Cloudflare的验证机制，请稍后再试');
     }
+
+    const results = parse(body);
+    await attachBase64Images(results, agent);
+    return results;
+}
+
+async function attachBase64Images(results, agent) {
+    await Promise.all(results.map(async (item) => {
+        try {
+            const res = await fetch(item.image, {
+                agent: agent,
+                headers: { referer: `${BASE_URL}/` },
+            });
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            item.image = 'base64://' + Buffer.from(await res.arrayBuffer()).toString('base64');
+        } catch (error) {
+            logger.error(`[Ascii2d] 缩略图下载失败（${error}）：${item.image}`);
+        }
+    }));
 }
 
 async function searchByFlareSolverr(imageUrl, type) {
