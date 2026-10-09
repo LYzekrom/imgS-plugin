@@ -1,6 +1,7 @@
 import fetch from 'node-fetch';
 import { FormData } from 'formdata-polyfill/esm.min.js';
 import { fileFromSync } from 'fetch-blob/from.js';
+import { readFileSync } from 'fs';
 import { load } from 'cheerio';
 import _ from 'lodash';
 import downloadImage from '../utils/download.js';
@@ -65,14 +66,14 @@ async function Yandex(url) {
     // 2. 浏览器兜底：页面上下文下载图片并上传，真浏览器指纹
     if (!body) {
         logger.info('[Yandex] 尝试通过浏览器上传搜索');
-        const diag = await runInPage(`${BASE_URL}images/`, cookie, async (imageUrl) => {
+        const diag = await runInPage(`${BASE_URL}images/`, cookie, async (b64) => {
             const out = { step: 'init', info: '' };
             try {
-                const imgRes = await fetch(imageUrl);
-                out.step = 'download';
-                out.info = `HTTP ${imgRes.status}`;
-                if (!imgRes.ok) return out;
-                const blob = await imgRes.blob();
+                // 本地图片以 base64 传入页面，在浏览器上下文组装 Blob 上传
+                const bin = atob(b64);
+                const bytes = new Uint8Array(bin.length);
+                for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+                const blob = new Blob([bytes], { type: 'image/jpeg' });
                 const form = new FormData();
                 form.append('upfile', blob, 'blob');
                 const upRes = await fetch(`/images/search?rpt=imageview&format=json&request=${encodeURIComponent('{"blocks":[{"block":"b-page_type_search-by-image__link"}]}')}`, {
@@ -91,7 +92,7 @@ async function Yandex(url) {
                 out.info += ' 异常: ' + error.message;
                 return out;
             }
-        }, url).catch((error) => {
+        }, readFileSync(imagePath).toString('base64')).catch((error) => {
             logger.error('[Yandex] 浏览器上传失败：' + error);
             return null;
         });
