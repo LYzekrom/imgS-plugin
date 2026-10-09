@@ -6,7 +6,7 @@ import Init from '../model/init.js'
 const setEngine = {};
 
 // NapCat 要求图片段使用 url 字段传递远程地址，file 字段仅支持本地路径/base64
-const urlImage = (url) => ({ type: 'image', data: { url } });
+const urlImage = (url) => (segment.image(url));
 
 const lnk = {
     'SauceNAO': ['sao', 'sn'],
