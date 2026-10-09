@@ -62,23 +62,29 @@ async function Ascii2d(url) {
         }
     }
 
-    const results = parse(body);
+    const results = parse(body).slice(0, await Config.getConfig().Ascii2d.results);
     await attachBase64Images(results, agent);
     return results;
 }
 
 async function attachBase64Images(results, agent) {
     await Promise.all(results.map(async (item) => {
-        try {
-            const res = await fetch(item.image, {
-                agent: agent,
-                headers: { referer: `${BASE_URL}/` },
-            });
-            if (!res.ok) throw new Error(`HTTP ${res.status}`);
-            item.image = 'base64://' + Buffer.from(await res.arrayBuffer()).toString('base64');
-        } catch (error) {
-            logger.error(`[Ascii2d] 缩略图下载失败（${error}）：${item.image}`);
+        const attempts = [
+            { agent: agent, headers: { referer: `${BASE_URL}/` } },
+            { headers: { referer: `${BASE_URL}/` } },
+        ];
+        for (const options of attempts) {
+            try {
+                const res = await fetch(item.image, options);
+                if (!res.ok) continue;
+                item.image = 'base64://' + Buffer.from(await res.arrayBuffer()).toString('base64');
+                return;
+            } catch {
+                // 尝试下一种方式
+            }
         }
+        logger.error(`[Ascii2d] 缩略图下载失败，仅发送文字结果：${item.image}`);
+        item.image = null;
     }));
 }
 

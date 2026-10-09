@@ -170,7 +170,7 @@ export class Search extends plugin {
                     response.slice(0, await Config.getConfig().Ascii2d.results).forEach(async item => {
                         let msg = [];
 
-                        if (!safe_mode) {
+                        if (!safe_mode && item.image) {
                             messages.push({ message: [segment.image(item.image)] });
                         }
 
