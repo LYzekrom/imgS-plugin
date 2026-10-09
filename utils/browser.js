@@ -56,6 +56,18 @@ async function urlToBase64(url, referer) {
     }
 }
 
+async function setPageCookie(page, cookie) {
+    const cookies = cookie.split(';').map((pair) => {
+        const idx = pair.indexOf('=');
+        return idx > 0 ? {
+            name: pair.slice(0, idx).trim(),
+            value: pair.slice(idx + 1).trim(),
+            domain: '.yandex.com',
+        } : null;
+    }).filter(Boolean);
+    if (cookies.length) await page.setCookie(...cookies);
+}
+
 /**
  * 在真实浏览器中打开页面并返回渲染后的完整 HTML
  * 用于规避基于客户端指纹的人机验证（如 Yandex）
@@ -67,15 +79,7 @@ async function fetchHtml(url, cookie) {
     const page = await (await getBrowser()).newPage();
     try {
         if (cookie) {
-            const cookies = cookie.split(';').map((pair) => {
-                const idx = pair.indexOf('=');
-                return idx > 0 ? {
-                    name: pair.slice(0, idx).trim(),
-                    value: pair.slice(idx + 1).trim(),
-                    domain: '.yandex.com',
-                } : null;
-            }).filter(Boolean);
-            if (cookies.length) await page.setCookie(...cookies);
+            await setPageCookie(page, cookie);
         }
         await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
         await new Promise((resolve) => setTimeout(resolve, 3000));
@@ -85,4 +89,25 @@ async function fetchHtml(url, cookie) {
     }
 }
 
-export { urlToBase64, fetchHtml };
+/**
+ * 在真实浏览器页面上下文中执行异步函数
+ * @param {string} url 先访问的页面地址（提供同源上下文）
+ * @param {string} cookie 可选，注入 .yandex.com 域名下
+ * @param {Function} fn 在页面内执行的函数，可携带额外参数
+ * @returns {Promise<any>} fn 的返回值
+ */
+async function runInPage(url, cookie, fn, ...args) {
+    const page = await (await getBrowser()).newPage();
+    try {
+        if (cookie) {
+            await setPageCookie(page, cookie);
+        }
+        await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+        return await page.evaluate(fn, ...args);
+    } finally {
+        await page.close().catch(() => { });
+    }
+}
+
+export { urlToBase64, fetchHtml, runInPage };
