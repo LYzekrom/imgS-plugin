@@ -68,10 +68,14 @@ async function Ascii2d(url) {
 }
 
 async function attachBase64Images(results, agent) {
+    const browserHeaders = {
+        referer: `${BASE_URL}/`,
+        'user-agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36',
+    };
     await Promise.all(results.map(async (item) => {
         const attempts = [
-            { agent: agent, headers: { referer: `${BASE_URL}/` } },
-            { headers: { referer: `${BASE_URL}/` } },
+            { agent: agent, headers: browserHeaders },
+            { headers: browserHeaders },
         ];
         for (const options of attempts) {
             try {
