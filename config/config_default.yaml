@@ -10,6 +10,9 @@ proxy:
   enable: false
   host: 127.0.0.1
   port: 7890
+FlareSolverr:
+  enable: true
+  url: 'http://127.0.0.1:8191'
 SauceNAO:
   similarity: 80
   hide: false
