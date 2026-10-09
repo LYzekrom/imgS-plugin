@@ -38,7 +38,9 @@ async function Yandex(url) {
         }
     }
 
-    return parse(body);
+    const results = parse(body);
+    logger.info(`[Yandex] 解析到 ${results.length} 条结果（页面 ${body.length} 字符，含 serp-item: ${body.includes('serp-item')}）`);
+    return results;
 }
 
 function parse(body) {
