@@ -37,7 +37,12 @@ async function Ascii2d(url) {
         agent: agent,
     });
 
-    if (colorResponse.status === 403 && (await colorResponse.text()).includes('Just a moment')) {
+    let errorBody = '';
+    if (colorResponse.status === 403) {
+        errorBody = await colorResponse.text();
+    }
+
+    if (errorBody.includes('Just a moment')) {
         logger.info('[Ascii2d] 触发 Cloudflare 验证，尝试通过 FlareSolverr 获取凭证');
         flareHeaders = await getFlareHeaders();
         if (flareHeaders) {
@@ -47,6 +52,7 @@ async function Ascii2d(url) {
                 agent: agent,
                 headers: flareHeaders,
             });
+            errorBody = colorResponse.status === 200 ? '' : await colorResponse.text();
             if (colorResponse.status !== 200) flareCache = null;
         }
     }
@@ -63,7 +69,7 @@ async function Ascii2d(url) {
         }
         return parse(response);
     } else {
-        const errorBody = await colorResponse.text();
+        if (!errorBody) errorBody = await colorResponse.text();
         logger.error(`[Ascii2d] 请求失败，响应内容：${errorBody.slice(0, 500)}`);
         throw new Error('[Ascii2d] 请求失败，可能触发了Cloudflare的验证机制，请稍后再试');
     }
@@ -74,7 +80,7 @@ async function getFlareHeaders() {
     if (!flare?.enable) return null;
     if (flareCache && flareCache.expire > Date.now()) return flareCache.headers;
     try {
-        const result = await fetch(flare.url, {
+        const result = await fetch(flare.url.replace(/\/$/, '') + '/v1', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
