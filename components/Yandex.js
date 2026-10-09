@@ -33,7 +33,7 @@ async function Yandex(url) {
     try {
         const form = new FormData();
         form.append('upfile', fileFromSync(imagePath), 'blob');
-        const uploadResult = await fetch(`${BASE_URL}images/search?rpt=imageview&format=json&request=${encodeURIComponent(UPLOAD_REQUEST)}`, {
+        const res = await fetch(`${BASE_URL}images/search?rpt=imageview&format=json&request=${encodeURIComponent(UPLOAD_REQUEST)}`, {
             method: 'POST',
             agent: agent,
             headers: {
@@ -42,13 +42,21 @@ async function Yandex(url) {
                 'X-Requested-With': 'XMLHttpRequest',
             },
             body: form,
-        }).then((res) => res.json());
-        const resultPath = uploadResult?.blocks?.[0]?.params?.url;
-        if (resultPath) {
-            body = await fetch(new URL(resultPath, BASE_URL).toString(), {
-                headers: { cookie: cookie ?? '', 'user-agent': BROWSER_UA },
-                agent: agent,
-            }).then((res) => res.text());
+        });
+        const text = await res.text();
+        if (!res.ok) {
+            logger.error(`[Yandex] 上传接口 HTTP ${res.status}：${text.slice(0, 300)}`);
+        } else {
+            const uploadResult = JSON.parse(text);
+            const resultPath = uploadResult?.blocks?.[0]?.params?.url;
+            if (!resultPath) {
+                logger.error(`[Yandex] 上传接口返回异常：${text.slice(0, 300)}`);
+            } else {
+                body = await fetch(new URL(resultPath, BASE_URL).toString(), {
+                    headers: { cookie: cookie ?? '', 'user-agent': BROWSER_UA },
+                    agent: agent,
+                }).then((r) => r.text());
+            }
         }
     } catch (error) {
         logger.info(`[Yandex] 上传接口请求失败，尝试浏览器上传：${error.message}`);
@@ -57,10 +65,13 @@ async function Yandex(url) {
     // 2. 浏览器兜底：页面上下文下载图片并上传，真浏览器指纹
     if (!body) {
         logger.info('[Yandex] 尝试通过浏览器上传搜索');
-        const cbirPath = await runInPage(`${BASE_URL}images/`, cookie, async (imageUrl) => {
+        const diag = await runInPage(`${BASE_URL}images/`, cookie, async (imageUrl) => {
+            const out = { step: 'init', info: '' };
             try {
                 const imgRes = await fetch(imageUrl);
-                if (!imgRes.ok) return null;
+                out.step = 'download';
+                out.info = `HTTP ${imgRes.status}`;
+                if (!imgRes.ok) return out;
                 const blob = await imgRes.blob();
                 const form = new FormData();
                 form.append('upfile', blob, 'blob');
@@ -69,15 +80,23 @@ async function Yandex(url) {
                     headers: { 'X-Requested-With': 'XMLHttpRequest' },
                     body: form,
                 });
-                const data = await upRes.json();
-                return data?.blocks?.[0]?.params?.url ?? null;
-            } catch {
-                return null;
+                const text = await upRes.text();
+                out.step = 'upload';
+                out.info = `HTTP ${upRes.status} ${text.slice(0, 300)}`;
+                if (!upRes.ok) return out;
+                const data = JSON.parse(text);
+                out.path = data?.blocks?.[0]?.params?.url ?? null;
+                return out;
+            } catch (error) {
+                out.info += ' 异常: ' + error.message;
+                return out;
             }
         }, url).catch((error) => {
             logger.error('[Yandex] 浏览器上传失败：' + error);
             return null;
         });
+        logger.info('[Yandex] 浏览器上传诊断：' + JSON.stringify(diag));
+        const cbirPath = diag?.path ?? null;
         if (cbirPath) {
             body = await fetchHtml(new URL(cbirPath, BASE_URL).toString(), cookie).catch(() => null);
         }
