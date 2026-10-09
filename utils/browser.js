@@ -1,12 +1,22 @@
 import puppeteer from 'puppeteer';
+import Config from '../components/Config.js';
 
 let browser = null;
 
 async function getBrowser() {
     if (browser && browser.connected) return browser;
+    const args = ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'];
+    try {
+        const proxy = Config.getConfig()?.proxy;
+        if (proxy?.enable) {
+            args.push(`--proxy-server=http://${proxy.host}:${proxy.port}`);
+        }
+    } catch {
+        // 配置不可用时直连
+    }
     browser = await puppeteer.launch({
         headless: true,
-        args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
+        args: args,
     });
     browser.on('disconnected', () => {
         browser = null;
@@ -46,4 +56,33 @@ async function urlToBase64(url, referer) {
     }
 }
 
-export { urlToBase64 };
+/**
+ * 在真实浏览器中打开页面并返回渲染后的完整 HTML
+ * 用于规避基于客户端指纹的人机验证（如 Yandex）
+ * @param {string} url 页面地址
+ * @param {string} cookie 可选，"k=v; k=v" 格式，会注入 .yandex.com 域名下
+ * @returns {Promise<string>} 页面 outerHTML
+ */
+async function fetchHtml(url, cookie) {
+    const page = await (await getBrowser()).newPage();
+    try {
+        if (cookie) {
+            const cookies = cookie.split(';').map((pair) => {
+                const idx = pair.indexOf('=');
+                return idx > 0 ? {
+                    name: pair.slice(0, idx).trim(),
+                    value: pair.slice(idx + 1).trim(),
+                    domain: '.yandex.com',
+                } : null;
+            }).filter(Boolean);
+            if (cookies.length) await page.setCookie(...cookies);
+        }
+        await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
+        await new Promise((resolve) => setTimeout(resolve, 3000));
+        return await page.evaluate(() => document.documentElement.outerHTML);
+    } finally {
+        await page.close().catch(() => { });
+    }
+}
+
+export { urlToBase64, fetchHtml };

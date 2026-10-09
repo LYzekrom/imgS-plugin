@@ -3,6 +3,7 @@ import { load } from 'cheerio';
 import _ from 'lodash';
 import Config from './Config.js';
 import { HttpsProxyAgent } from 'https-proxy-agent';
+import { fetchHtml } from '../utils/browser.js';
 
 const BASE_URL = 'https://yandex.com/';
 
@@ -18,16 +19,26 @@ async function Yandex(url) {
 
     const requestUrl = `${BASE_URL}images/search?cbir_page=similar&rpt=imageview&url=${encodeURIComponent(url)}`;
 
-    const response = await fetch(requestUrl, {
+    let body = await fetch(requestUrl, {
         headers: { cookie: cookie ?? '' },
         agent: agent,
     }).then((res) => res.text());
 
-    if (response.includes('Please confirm that you are not a robot')) {
-        throw new Error(`Request failed, request URL: ${requestUrl}`);
+    if (body.includes('Please confirm that you are not a robot')) {
+        logger.info('[Yandex] 触发人机验证，尝试通过浏览器搜索');
+        body = await fetchHtml(requestUrl, cookie).catch((error) => {
+            logger.error('[Yandex] 浏览器搜索失败：' + error);
+            return null;
+        });
+        if (!body) {
+            throw new Error('浏览器搜索失败，请求 URL: ' + requestUrl);
+        }
+        if (body.includes('Please confirm that you are not a robot')) {
+            throw new Error('浏览器仍被人机验证拦截，请更新 Yandex cookie 后重试');
+        }
     }
 
-    return parse(response);
+    return parse(body);
 }
 
 function parse(body) {
