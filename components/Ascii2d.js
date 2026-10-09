@@ -115,11 +115,63 @@ function parse(body) {
         return {
             hash: hash.text(),
             info: info.text(),
-            image: new URL(image.attribs['src'] ?? image.attribs['data-cfsrc'], BASE_URL).toString(),
+            image: urlToBase64(new URL(image.attribs['src'] ?? image.attribs['data-cfsrc'], BASE_URL).toString()),
             source: source ? { link: source.attribs.href, text: $(source).text() } : undefined,
             author: author ? { link: author.attribs.href, text: $(author).text() } : undefined,
         };
     }).filter((value) => value !== undefined);
 }
 
+/**
+ * 统一的 fetch 请求方法，带重试机制
+ * @param {string} url - 请求URL
+ * @param {object} options - fetch 选项
+ * @param {number} retries - 重试次数，默认3次
+ * @param {string} context - 请求上下文（用于日志）
+ * @returns {Promise<Response>}
+ */
+async function fetchWithRetry(url, options, retries = 3, context = '') {
+    for (let i = 0; i < retries; i++) {
+        try {
+            const response = await fetch(url, options);
+            return response;
+        } catch (error) {
+            const isLastAttempt = i === retries - 1;
+            if (isLastAttempt) {
+                logger.error(`[Ascii2d搜图] ${context} 请求失败，已重试${retries}次: ${error}`);
+                this.logProxyInfo();
+                throw error;
+            }
+            // 递增延迟：1s, 2s, 3s...
+            const delay = 1000 * (i + 1);
+            logger.warn(`[Ascii2d搜图] ${context} 请求失败，${delay}ms后第${i + 2}次重试: ${error.message}`);
+            await new Promise(r => setTimeout(r, delay));
+        }
+    }
+}
+
+/**
+* @description 将图片URL内容转换为Base64字符串
+* @param {string} url 图片的URL
+* @returns {Promise<string>} Base64编码的图片数据URI
+*/
+async function urlToBase64(url) {
+    try {
+        const response = await fetchWithRetry(url, {
+            timeout: 60000,
+        }, 3, `下载图片转Base64`);
+
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+
+        const buffer = await response.buffer();
+        const contentType = response.headers.get('content-type') || 'image/jpeg';
+        const base64 = buffer.toString('base64');
+        return `data:${contentType};base64,${base64}`;
+    } catch (error) {
+        logger.error(`[Ascii2d搜图] URL转Base64失败: ${url}, Error: ${error}`);
+        return "";
+    }
+}
 export { Ascii2d };
