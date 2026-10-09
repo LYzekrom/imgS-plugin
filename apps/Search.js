@@ -271,8 +271,11 @@ export class Search extends plugin {
                             messages.push({ message: [segment.image('base64://' + item.preview)] });
                         }
 
-                        item.char.forEach(el => {
-                            msg.push(`╔ 角色：${el.name}\n╠ 来自动漫：${el.cartoonname}\n╚ 相似度：${el.acc.toFixed(2)}\n`);
+                        if (item.not_confident) {
+                            msg.push('（置信度较低，结果需人工确认）\n');
+                        }
+                        item.characters.forEach(el => {
+                            msg.push(`╔ 角色：${el.character}\n╚ 来自动漫：${el.work}\n`);
                         })
 
                         messages.push({ message: msg.join('') });

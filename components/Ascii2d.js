@@ -25,14 +25,19 @@ async function Ascii2d(url) {
     const type = await Config.getConfig().Ascii2d.type;
     const proxy = await Config.getConfig().Ascii2d.proxy;
 
+    const requestUrl = `${proxy ? PROXY_URL : BASE_URL}/search/file`;
+    logger.info(`[Ascii2d] 请求 URL：${requestUrl}，代理：${agent ? '启用' : '未启用'}`);
+
     const colorResponse = await fetch(
-        `${proxy ? PROXY_URL : BASE_URL}/search/file`,
+        requestUrl,
         {
             method: 'POST',
             body: form,
             agent: agent,
         }
     );
+
+    logger.info(`[Ascii2d] 响应状态：HTTP ${colorResponse.status} ${colorResponse.statusText}，最终 URL：${colorResponse.url}`);
 
     if (colorResponse.status === 200) {
         let response;
@@ -44,6 +49,8 @@ async function Ascii2d(url) {
         }
         return parse(response);
     } else {
+        const errorBody = await colorResponse.text();
+        logger.error(`[Ascii2d] 请求失败，响应内容：${errorBody.slice(0, 500)}`);
         throw new Error('[Ascii2d] 请求失败，可能触发了Cloudflare的验证机制，请稍后再试');
     }
 }

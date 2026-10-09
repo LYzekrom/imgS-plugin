@@ -291,17 +291,10 @@ export function supportGuoba() {
         {
           field: "AnimeTrace.model",
           label: "搜索模型",
-          bottomHelpMessage: "选择搜索模型",
-          component: "Select",
+          bottomHelpMessage: "模型ID（可通过 https://api.animetrace.com/v1/model/list 查询），留空自动使用官方默认模型",
+          component: "Input",
           componentProps: {
-            options: [
-              { label: "通用识别场景[gochiusa]", value: 'large_model_preview' },
-              { label: "低准确率动漫模型", value: "anime" },
-              { label: "高级动画模型[lovelive]", value: "anime_model_lovelive" },
-              { label: "高级动画模型[yamanosusume]", value: "pre_stable" },
-              { label: "1号GalGame模型", value: "game" },
-              { label: "2号GalGame模型[kirakira]", value: "game_model_kirakira" },
-            ],
+            placeholder: "留空自动",
           },
         },
         {

@@ -1,46 +1,54 @@
 import fetch from 'node-fetch';
-import { fileFromSync } from 'fetch-blob/from.js';
 import { FormData } from 'formdata-polyfill/esm.min.js';
+import { fileFromSync } from 'fetch-blob/from.js';
 import downloadImage from '../utils/download.js';
 import Config from './Config.js';
-import { HttpsProxyAgent } from 'https-proxy-agent';
 import Jimp from 'jimp';
 
-const BASE_URL = 'https://api.animetrace.com/v1/search';
+const BASE_URL = 'https://api.animetrace.com';
+
+let modelListCache = null;
 
 async function AnimeTrace(url) {
     const imagePath = await downloadImage(url);
 
     const form = new FormData();
-    form.append('image', fileFromSync(imagePath));
+    form.append('file', fileFromSync(imagePath));
+    form.append('model', await getModel());
+    form.append('is_multi', (await Config.getConfig().AnimeTrace.mode) ? '1' : '0');
+    form.append('ai_detect', '1');
     return await request(form, imagePath);
 }
 
-async function request(form, imagePath) {
-
-    let agent = null
-    if (Config.getConfig().proxy.enable) {
-        let proxy = 'http://' + Config.getConfig().proxy.host + ':' + Config.getConfig().proxy.port
-        agent = new HttpsProxyAgent(proxy)
-    }
-
-    const model = Config.getConfig().AnimeTrace.model;
-    const mode = Config.getConfig().AnimeTrace.mode;
-
-    const response = await fetch(
-        `${BASE_URL}?model=${model ? model : 'anime'}&force_one=${mode ? mode : 1}`,
-        {
-            method: 'POST',
-            body: form
+async function getModel() {
+    const preferred = await Config.getConfig().AnimeTrace.model;
+    try {
+        if (!modelListCache) {
+            modelListCache = await fetch(`${BASE_URL}/v1/model/list`).then((res) => res.json());
         }
-    ).then(res => res.json());
+        if (modelListCache.code === 0) {
+            const enabled = modelListCache.data.filter((model) => model.enabled);
+            if (enabled.some((model) => model.id === preferred)) return preferred;
+            const def = enabled.find((model) => model.default) || enabled[0];
+            if (def) return def.id;
+        }
+    } catch (error) {
+        logger.error('[AnimeTrace] 获取模型列表失败：' + error);
+    }
+    return preferred;
+}
+
+async function request(form, imagePath) {
+    const response = await fetch(`${BASE_URL}/v1/search`, {
+        method: 'POST',
+        body: form
+    }).then(res => res.json());
 
     if (response.code === 0) {
         return await parse(response.data, imagePath);
-    } else {
-        console.log(response);
-        throw new Error('请求失败');
     }
+    logger.error('[AnimeTrace] 接口返回错误：' + JSON.stringify(response));
+    throw new Error('请求失败');
 }
 
 async function parse(response, imagePath) {
@@ -68,7 +76,15 @@ async function parse(response, imagePath) {
             }
         }
     }
-    return response;
+    return response.map((data) => ({
+        box: data.box,
+        not_confident: data.not_confident,
+        characters: (data.character || []).map((item) => ({
+            work: item.work,
+            character: item.character
+        })),
+        preview: data.preview
+    }));
 }
 
 export { AnimeTrace };
