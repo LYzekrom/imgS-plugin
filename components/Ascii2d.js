@@ -3,6 +3,7 @@ import { FormData } from 'formdata-polyfill/esm.min.js';
 import { load } from 'cheerio';
 import { fileFromSync } from 'fetch-blob/from.js';
 import downloadImage from '../utils/download.js';
+import { urlToBase64 } from '../utils/browser.js';
 import _ from 'lodash';
 import Config from './Config.js';
 import { HttpsProxyAgent } from 'https-proxy-agent';
@@ -86,6 +87,15 @@ async function attachBase64Images(results, agent) {
             } catch {
                 // 尝试下一种方式
             }
+        }
+        // node-fetch 被指纹拦截时，退化到真实浏览器上下文下载
+        const base64 = await urlToBase64(item.image, `${BASE_URL}/`).catch((error) => {
+            logger.error(`[Ascii2d] 浏览器下载缩略图失败：${error}`);
+            return null;
+        });
+        if (base64) {
+            item.image = base64;
+            return;
         }
         logger.error(`[Ascii2d] 缩略图下载失败，仅发送文字结果：${item.image}`);
         item.image = null;
